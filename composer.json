@@ -1,0 +1,17 @@
+{
+    "name": "xtoyun/template",
+    "authors": [
+        {
+            "name": "xtoyun",
+            "email": "yun@xtocn.com"
+        }
+    ],
+    "require": {
+        "php" : ">=5.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "xto\\template\\" : "src/"
+        }
+    }
+}
