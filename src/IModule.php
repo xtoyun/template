@@ -13,9 +13,11 @@ namespace xto\template;
 
 use think\Cache;
 use think\Request;
-use xto\membership\context\Users;
+use app\data\membership\Users;
 use xto\membership\core\UserHelper;
-//use app\common\dao\ConfigDao;
+use app\data\model\Config;
+use app\data\App;
+use think\facade\Session; 
 
 abstract class IModule{
 	private $data=[];
@@ -62,7 +64,7 @@ abstract class IModule{
      * @return string
      */
 	protected function configPath(){
-		return $this->modulePath().DS.'config.xml';
+		return $this->modulePath().'/config.xml';
 	}
 
 	/**
@@ -71,7 +73,7 @@ abstract class IModule{
      * @return string
      */
 	protected function menuPath(){
-		return $this->modulePath().DS.'admin.xml';
+		return $this->modulePath().'/admin.xml';
 	}
 
 	public function getModulename(){
@@ -89,7 +91,8 @@ abstract class IModule{
 	public function getConfig($action){ 
 		if(file_exists($this->configPath())){
 			$c=file_get_contents($this->configPath()); 
-			$result=\xto\core\XML2Array::createArray($c);
+
+			$result=XML2Array::createArray($c);
 
 			$items=$result['config']['item'];
 
@@ -110,12 +113,13 @@ abstract class IModule{
 				$tab=$item['@attributes']['tab'];
 				$name=$item['@attributes']['name'];
 				if($action==$tab){
-					$t=\xto\Util::strToArray('|',$item['@attributes']['attr']);
+					$t=Util::strToArray('|',$item['@attributes']['attr']);
 					$data[]=[$item['@attributes']['type'],
 						$item['@attributes']['name'],
 						$item['@attributes']['title'],
-						$item['@attributes']['tips'],'',
+						$item['@attributes']['tips'],
 						//isset($configs[$name])?$configs[$name]:'',
+						'',
 						$t]; 
 				}
 			}
@@ -159,21 +163,27 @@ abstract class IModule{
 	} 
 
 	static function current(){
-		$url='\\app\\'.Request::instance()->module().'\\Module';
+		$request=request();
+		$url='\\app\\'.$request->module().'\\Module';
 		return $url::instance();
 	}
 
 	public function getMenus(){
-		$this->loadmenu();
-		return $this->data['menu'];
-		$c=Cache::get($this->cachename());
-		if (!empty($c)) {
-			return $c;
-		}else{
-			$this->loadmenu();
-			Cache::set($this->cachename(),$menus,3600);
+		$this->loadmenu(); 
+		if(isset($this->data['menu'])){
 			return $this->data['menu'];
-		}  
+		}
+		
+		// $c=Cache::get($this->cachename());
+		// if (!empty($c)) {
+		// 	return $c;
+		// }else{
+		// 	$this->loadmenu();
+		// 	Cache::set($this->cachename(),$menus,3600);
+		// 		if(isset($this->data['menu'])){
+		// 		return $this->data['menu'];
+		// 	}
+		// }  
 	}
 
 	public function __get($name)              // 这里$name是属性名
@@ -202,75 +212,81 @@ abstract class IModule{
 
 	//读取菜单处理
 	final private function loadmenu(){
-		$user=Users::getLoginManager();//获取当前管理员
+		// dump(Session::get(App::user_auth()));
+		// dump(App::get_manager_username());
+		$user=Users::getuser(0,App::get_manager_username());//获取当前管理员
+		// dump($user);
+		// die;
 		if(is_null($user)){
 			$this->data['menu']=null;
 			return $this;
 		}
-		$funs=UserHelper::getUserFunctions($user->userid);
-
-		
+		//$funs=UserHelper::getUserFunctions($user->userid);
 
 		if(file_exists($this->menuPath())){
-		$xml=simplexml_load_file($this->menuPath());
 
-		$doc= $xml[0];//所有菜单
-		$c=strtolower(\think\Request::instance()->controller());
+			$xml=simplexml_load_file($this->menuPath());
 
-		$menus=[]; 
-		foreach ($doc as $key => $value) {
-			$status=false;//控制当前权限
-			//如果是管理员，直接通过
-			if($user->is_admin){
-				$status=true;
-			}else if(!$user->is_admin && in_array((string)$value['url'],$funs)){
-				//检查是否有权限访问当地址
-				$status=true;
-			}
-			if($status){
-				$ps=array();
-				$isclass=false;
-				foreach ($value->pagelink as $key1 => $value1) {
-					$status=false;
-					if($user->is_admin){
-						$status=true;
-					}else if(!$user->is_admin && in_array((string)$value1['url'],$funs)){
-						$status=true;
-					}
-					if($status){
-						$value_c=(string)$value1['c'];
-						if($value_c==$c){
-							$isclass=true;
+			$doc= $xml[0];//所有菜单
+			$c=strtolower(request()->controller());
+
+			$menus=[]; 
+			foreach ($doc as $key => $value) {
+				$status=false;//控制当前权限
+				//如果是管理员，直接通过
+				if($user->is_admin){
+					$status=true;
+				}else if(!$user->is_admin && in_array((string)$value['url'],$funs)){
+					//检查是否有权限访问当地址
+					$status=true;
+				}
+				if($status){
+					$ps=array();
+					$isclass=false;
+					foreach ($value->pagelink as $key1 => $value1) {
+						$status=false;
+						if($user->is_admin){
+							$status=true;
+						}else if(!$user->is_admin && in_array((string)$value1['url'],$funs)){
+							$status=true;
 						}
-						$fu=array();
-						foreach ($value1->function as $key2 => $value2) {
-							$fu[]=[
-								'title'=>(string)$value2['title'],
-								'url'=>(string)$value2['url']
-								];
+						if($status){
+							$value_c=(string)$value1['c'];
+							if(strpos($value_c,$c)!==false){
+								$isclass=true;
+							}
+							$fu=array();
+							foreach ($value1->function as $key2 => $value2) {
+								$fu[]=[
+									'title'=>(string)$value2['title'],
+									'url'=>(string)$value2['url']
+									];
+							}
+							$ps[]=[
+								'title'=>(string)$value1['title'],
+								'class'=>(string)$value1['class'],
+								'current'=>strpos($value_c,$c)!==false?'active':'',
+								'url'=>(string)$value1['url'],
+								'link'=>url((string)$value1['url']),
+								'function'=>$fu
+							];
 						}
-						$ps[]=[
-							'title'=>(string)$value1['title'],
-							'class'=>(string)$value1['class'],
-							'current'=>($value_c==$c)?'active':'',
-							'url'=>(string)$value1['url'],
-							'link'=>url((string)$value1['url']),
-							'function'=>$fu
-						];
-					}
-				} 
-				$menus[]=[ 
-				'title'=>(string)$value['title'],
-				'class'=>(string)$value['class'],
-				'url'=>(string)$value['url'],
-				'link'=>url((string)$value['url']),
-				'current'=>$isclass?'active':'',
-				'pagelink'=>$ps]; 
+					} 
+					$menus[]=[ 
+					'title'=>(string)$value['title'],
+					'class'=>(string)$value['class'],
+					'url'=>(string)$value['url'],
+					'link'=>url((string)$value['url']),
+					'current'=>$isclass?'active':'',
+					'pagelink'=>$ps]; 
+				}
 			}
+
 		}
-
-	}
-		$this->data['menu']=$menus; 
+		if (!empty($menus)) {
+			$this->data['menu']=$menus; 
+		}
+		
 		return $this;
 	}
 

@@ -79,6 +79,7 @@ abstract class TableTemplate  extends Template{
                         }
                         $default=$this->getDefault($row,$columns,$default);
 
+
                         switch ($column['type']) {
                             case 'img':
                                 $row[$name]="<img src='$v'>";
@@ -117,10 +118,17 @@ abstract class TableTemplate  extends Template{
     }
 
     public function getDefault($row,$cs,$txt){
-        foreach ($row as $key => $value) {
-            $txt=str_replace('$'.$key, $value, $txt);
-        } 
-        return $txt;
+   
+            $arr=$row;
+            if (is_object($row)) {
+                $arr=$row->toArray();
+            }
+           foreach ($arr as $key => $value) {
+                $txt=str_replace('$'.$key, $value, $txt);
+            } 
+            return $txt; 
+         
+        
     }
 
 	public function setColumn($name = '', $title = '', $type = '', $default = '', $param = '', $class = '',$format=''){
@@ -246,7 +254,7 @@ abstract class TableTemplate  extends Template{
                 ];
                 break;
             case 'delete':
-                $key=strtolower($this->controller.'_'.$this->action.'_delete');
+                $key=url(strtolower($this->controller.'/delete_post'));
                 $result = [
                     'title' => '删除',
                     'icon'  => 'fa fa-times',

@@ -12,18 +12,17 @@
 namespace xto\template;
 
 
-use xto\App;
+//use xto\App;
 use xto\membership\context\Context;
 use xto\membership\context\Users;
-use xto\module\IModule;
+use xto\template\IModule;
 use xto\template\Template;
-use app\common\dao\ConfigDao;
 use think\Controller;
 use think\Request;
 
 class TemplateController extends Controller{
-	private $app;
-	private $context;
+    protected $app;
+    private $context;
     private $template;
     private $module;
     private $m;
@@ -39,12 +38,12 @@ class TemplateController extends Controller{
         'setlayout'     =>['isview'=>true,'header'=>true,'nav'=>true,'aside'=>true]
     ];
 
-    public function _initialize(){
-        parent::_initialize();
-        $request=Request::instance();
+    public function __construct(){
+        parent::__construct();
+        $request=$this->request;
 
-        $this->cdao=ConfigDao::instance();//读取配置数据类
-        $this->app=App::instance(); 
+        //$this->cdao=ConfigDao::instance();//读取配置数据类
+        //$this->app=App::instance(); 
         //$this->template=Template::current($this);//当前模块模板
 
         $this->m=$request->module();
@@ -52,8 +51,8 @@ class TemplateController extends Controller{
         $this->a=$request->action();
         
         $this->module=IModule::current(); //当前模块信息
-        $this->context=Context::current();//页面上下文信息
-        $this->config=$this->cdao->getConfigs(true);
+        //$this->context=Context::current();//页面上下文信息
+        //$this->config=$this->cdao->getConfigs(true);
         
         $this->assign('m',strtolower($this->m));
         $this->assign('c',strtolower($this->c));
@@ -62,6 +61,8 @@ class TemplateController extends Controller{
         $this->assign('viewurl',$this->module->viewurl);//当前模块首页 
         $this->assign('layout',$this->layout);//指定母版页面 
         $this->assign('menus',$this->module->menus);//默认模块菜单
+ 
+ 
         $this->assign('config',$this->config);//配置当前站点信息
         $this->assign('modules',$this->module->modules());//当前所有模块
         
@@ -72,16 +73,16 @@ class TemplateController extends Controller{
     } 
 
     //重写fetch
-    public function fetch($template = '', $vars = [], $replace = [], $config = [])
-    {  
+    protected function fetch($template = '', $vars = [], $replace = [], $config = [])
+    {   
         $vars = array_merge($vars, $this->_vars);
-        return parent::fetch($template, $vars, $replace, $config); 
+        $result= parent::fetch($template, $vars, $config); 
+        return str_replace(array_keys($replace), array_values($replace), $result);
     } 
 
     //重写view
-    public function view($template = '', $vars = [], $replace = []){
-        $vars = array_merge($vars, $this->_vars);
-        return \think\Response::create($template, 'view', 200)->replace($replace)->assign($vars);
+    protected function view($template = '', $vars = [], $replace = []){
+        return $this->fetch($template,$vars,$replace);
     }
 
 
@@ -238,12 +239,18 @@ class TemplateController extends Controller{
         return $this;
     }
 
-    public function addLeftBlock($name,$title,$template){
+    public function addLeftBlock($name,$title,$template,$paras='',$type='file'){
+        $str=$template;
+        if ($type=='file') {
+            $str=config('template.view_path').$template.'.html';
+        }
         $result=[
             'name'=>$name,
             'title'=>$title,
-            'template'=>config('template.view_path').$template.'.html',
-            'isview'=>true
+            'template'=>$str,
+            'isview'=>true,
+            'type'=>$type,
+            'paras'=>$paras
         ];  
         //外面include总是会调用，未被引用的模板就会报错，用php最原始做法
         $this->setData('leftblock',$result);
@@ -312,9 +319,9 @@ class TemplateController extends Controller{
      * @access public
      * @return string
      */
-    public function find($name){
-        return $this->cdao->getconfig($name); 
-    }
+    // public function find($name){
+    //     return $this->cdao->getconfig($name); 
+    // }
 
     /**
      * 默认全局母板页
@@ -375,8 +382,8 @@ class TemplateController extends Controller{
      * @return string
      */
     public function getTheme(){
-        if(isset($this->view->theme)){
-            return $this->view->theme;
+        if(!empty(config('theme'))){
+            return config('theme');
         }else{
             return 'xui';//默认模板
         }   
@@ -400,13 +407,13 @@ class TemplateController extends Controller{
      * @return Template
      */
     public function getTemplate(){
-        //return $this->template;
         return $this;
     }
 
     public function getFormTemplate(){
         $m=Request()->module();
         $url=str_replace("/", "\\", "/app/$m/template/FormTemplate");
+
         $r = new \ReflectionClass($url);
         if($r->implementsInterface('\xto\template\iTemplate')){
             return new $url($this);
@@ -417,8 +424,11 @@ class TemplateController extends Controller{
     public function getTableTemplate(){
         $m=Request()->module();
         $url=str_replace("/", "\\", "/app/$m/template/TableTemplate");
+
         $r = new \ReflectionClass($url);
+
         if($r->implementsInterface('\xto\template\iTemplate')){
+
             return $this->template=new $url($this);
         }
     } 
@@ -455,9 +465,9 @@ class TemplateController extends Controller{
      * @access public
      * @return Module
      */
-	public function getApp(){
-		return $this->app;
-	} 
+    public function getApp(){
+        return $this->app;
+    } 
 
     public function getAction(){
         return request()->action();
@@ -472,11 +482,11 @@ class TemplateController extends Controller{
      * @access public
      * @return Module
      */
-	public function getContext(){
-		return $this->context;
-	}
+    public function getContext(){
+        return $this->context;
+    }
 
-	public function __get($name)              // 这里$name是属性名
+    public function __get($name)              // 这里$name是属性名
     {
         $getter = 'get' . $name;              // getter函数的函数名
         if (method_exists($this, $getter)) {
